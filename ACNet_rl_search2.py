@@ -20,6 +20,9 @@ def normalized_columns_initializer(std=1.0):
     return _initializer
 
 class ACNet:
+    '''
+    Define actor and critic network
+    '''
     def __init__(self, scope, a_size, num_agents, trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE):
         with tf.variable_scope(scope):
             #The input size may require more work to fit the interface.
@@ -33,12 +36,7 @@ class ACNet:
             self.actions_other             = tf.placeholder(shape=[None], dtype=tf.int32)
             self.actions_other_onehot      = tf.one_hot(self.actions_other, a_size, dtype=tf.float32)
             self.actions_other_flat = layers.flatten(self.actions_other_onehot)
-            # self.msg_input = tf.placeholder(shape=[None, num_recieved_msgs, msg_length], dtype = tf.float32) #shape of message
-            # self.myinput = tf.transpose(self.inputs, perm=[0,2,3,1])
-             # args: actor_inputs, msg_inputs, critic_inputs,RNN_SIZE,TRAINING,a_size
-            
-            #    policy,      P_msg,      value,      state_out_actor ,     state_in_actor,      state_init_actor
-            self.policy, self.P_msg, self.value, self.state_out_actor, self.state_init_actor = self._build_net(self.my_actor_inputs,
+           self.policy, self.P_msg, self.value, self.state_out_actor, self.state_init_actor = self._build_net(self.my_actor_inputs,
                                                                                                                self.msg_inputs_flat,
                                                                                                                self.my_critic_inputs,
                                                                                                                self.actions_other_flat, 

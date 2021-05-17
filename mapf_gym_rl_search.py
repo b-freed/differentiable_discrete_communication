@@ -1,7 +1,3 @@
-#TOOD:
-
-#Change reward structure(?)
-#Change world initialization such that rather than having a goal for each agent, we have a goal for each type, and each agent is a particular type
 
 
 
@@ -15,15 +11,7 @@ from matplotlib.colors import hsv_to_rgb
 import random
 import math
 import copy
-# from od_mstar3 import cpp_mstar
-# from od_mstar3.col_set_addition import NoSolutionError, OutOfTimeError
 
-#Environment contains an attribute self.world that is a State object.  
-#TODO: in _step, add code for adding agent's communication vector to msg_buffer
-#in _observe, add code for retrieving message to be input to agent 
-
-
-# from gym.envs.classic_control import rendering        
 
 
 '''
@@ -35,7 +23,6 @@ import copy
 		5:NE, 6:SE, 7:SW, 8:NW}
 	Reward: ACTION_COST for each action, GOAL_REWARD when robot arrives at target
 '''
-# ACTION_COST, IDLE_COST, GOAL_REWARD, COLLISION_REWARD,FINISH_REWARD,BLOCKING_COST = -0.3, -.5, 0.0, -2.,20.,-1.
 
 ACTION_COST      = -0.3
 IDLE_COST        = -.4
@@ -50,17 +37,7 @@ dirDict = {0:(0,0),1:(0,1),2:(1,0),3:(0,-1),4:(-1,0),5:(1,1),6:(1,-1),7:(-1,-1),
 actionDict={v:k for k,v in dirDict.items()}
 msg_length = 40
 vis_goal_range = 1.5
-# msg_length = 4
-# num_recieved_msgs = 3 #number of messages each agent recieves from nearest neighbors
 
-# class Goal(object):
-# 	def __init__(self, loc, goal_type):
-# 		self.loc = loc
-# 		self.goal_type = goal_type
-# 	def get_loc(self):
-# 		return self.loc
-# 	def get_goal_type(self):
-# 		return self.goal_type
 
 class State(object):
 	'''
@@ -412,11 +389,7 @@ class MAPFEnv(gym.Env):
 		#not doing obstacles for now
 		# prob=np.random.triangular(self.PROB[0],.33*self.PROB[0]+.66*self.PROB[1],self.PROB[1])
 		prob = self.PROB
-		# print('prob: ',prob)
-		# size=np.random.choice([self.SIZE[0],self.SIZE[0]*.5+self.SIZE[1]*.5,self.SIZE[1]],p=[.5,.25,.25])
-#         size=np.random.triangular(self.SIZE[0],self.SIZE[0],self.SIZE[1])
 		size = self.SIZE
-		# print('size: ',size)
 		world     = -(np.random.rand(int(size),int(size))<prob).astype(int)
 		while(not self.isConnected(world)):
 			world = -(np.random.rand(self.SIZE,self.SIZE)<prob).astype(int)
@@ -449,34 +422,7 @@ class MAPFEnv(gym.Env):
 				goal_counter += 1
 		self.initial_world = world
 		self.initial_goals = goals
-		#                world0, goals, goal_locs, goal_types, diagonal,                             num_agents
-		# print('goals: ',goals)
-		# print('goal_types: ',goal_types)
-		# print('goal_locs: ',goal_locs)
 		self.world = State(world,goals, goal_locs, goal_types,self.DIAGONAL_MOVEMENT,num_agents=self.num_agents)
-
-#        #if self.FULL_HELP:#only compute astar costs if FULL_HELP is enabled
-#         self.astarCosts=[]#list of costs for each agent
-#         for i in range(1,self.num_agents+1):
-#             self.astarCosts.append(self.getAstarCosts(self.world.getPos(i),self.world.getGoal(i)))
-	
-	# def get_visible_agents(self, agent_id):
-
-
-
-	# 	top_left=(self.world.getPos(agent_id)[0]-self.observation_size//2,self.world.getPos(agent_id)[1]-self.observation_size//2)
-	# 	bottom_right=(top_left[0]+self.observation_size,top_left[1]+self.observation_size)
-
-	# 	visible_agents=[]
-
-	# 	for i in range(top_left[0],top_left[0]+self.observation_size):
-	# 		for j in range(top_left[1],top_left[1]+self.observation_size):
-	# 			if i>=self.world.state.shape[0] or i<0 or j>=self.world.state.shape[1] or j<0:
-	# 				continue
-	# 			elif self.world.state[i,j]>0 and self.world.state[i,j]!=agent_id:
-	# 				visible_agents.append(self.world.state[i,j])
-
-	# 	return visible_agents
 
 	def dist_to_nearest_agent_goal(self, agent_id, metric = 'l1'):
 		agent_loc = self.world.getPos(agent_id)
@@ -498,39 +444,13 @@ class MAPFEnv(gym.Env):
 
 		return np.sqrt((pos1[0]-pos2[0])**2 + (pos1[1]-pos2[1])**2)
 
-	# def get_recipient_set(self, agent_id):
-	# 	'''
-	# 	returns the set of agents who got the message agent_id sent at the LAST timestep
-	# 	(as a list of agent id's)
-	# 	'''
-	# 	# if agent_id == 1:
-	# 	# 	for a in range(1,self.num_agents + 1):
-	# 	# 		print('loc of ',a,': ',self.world.getPos(a))
-	# 	# 	print('self.world.state: ',self.world.state)
-
-	# 	recipient_set = []
-	# 	for a in range(1,self.num_agents+1):
-	# 		if a != agent_id:
-	# 			#check if agent a can see agent_id
-	# 			vis_a = self.get_visible_agents(a) #set of agents visible to agent a
-	# 			# if agent_id == 1:
-	# 				# print('agents visible to ',a,': ',vis_a)
-				
-	# 			if agent_id in vis_a: #if agent_id is visible to agent a, add agent a to recipient set
-	# 				recipient_set.append(a)
-		
-	# 	# print('recipient_set: ', recipient_set)
-	# 	return recipient_set
 
 	def _observe_actor(self,agent_id):
 		assert(agent_id>0)
 
 		#get agent type:
 		agent_type = self.world.agent_goal_type(agent_id)
-		# if agent_type == 1:
-		# 	agent_type_other = 2
-		# else:
-		# 	agent_type_other = 1
+		
 
 		# 1. Position map for current agent (one-hot matrix, gives agent's position)
 		pos_map              = np.zeros((1,self.world.state.shape[0],self.world.state.shape[1]))
@@ -760,41 +680,7 @@ class MAPFEnv(gym.Env):
 			world[i,j]=0
 		return path
 	
-	#ignore blocking for now
-	# def get_blocking_reward(self,agent_id):
-	# 	'''calculates how many robots the agent is preventing from reaching goal
-	# 	and returns the necessary penalty'''
-	# 	#accumulate visible robots
-	# 	other_robots=[]
-	# 	other_locations=[]
-	# 	inflation=10
-	# 	top_left=(self.world.getPos(agent_id)[0]-self.observation_size//2,self.world.getPos(agent_id)[1]-self.observation_size//2)
-	# 	bottom_right=(top_left[0]+self.observation_size,top_left[1]+self.observation_size)        
-	# 	for agent in range(1,self.num_agents):
-	# 		if agent==agent_id: continue
-	# 		x,y=self.world.getPos(agent)
-	# 		if x<top_left[0] or x>=bottom_right[0] or y>=bottom_right[1] or y<top_left[1]:
-	# 			continue
-	# 		other_robots.append(agent)
-	# 		other_locations.append((x,y))
-	# 	num_blocking=0
-	# 	world=self.getObstacleMap()
-	# 	for agent in other_robots:
-	# 		other_locations.remove(self.world.getPos(agent))
-	# 		#before removing
-	# 		path_before=self.astar(world,self.world.getPos(agent),self.world.getGoal(agent),
-	# 							   robots=other_locations+[self.world.getPos(agent_id)])
-	# 		#after removing
-	# 		path_after=self.astar(world,self.world.getPos(agent),self.world.getGoal(agent),
-	# 							   robots=other_locations)
-	# 		other_locations.append(self.world.getPos(agent))
-	# 		if (path_before is None and path_after is None):continue
-	# 		if (path_before is not None and path_after is None):continue
-	# 		if (path_before is None and path_after is not None)\
-	# 			or len(path_before)>len(path_after)+inflation:
-	# 			num_blocking+=1
-	# 	return num_blocking*BLOCKING_COST
-			
+	
 		
 	# Executes an action by an agent
 	def compute_reward(self):
@@ -824,21 +710,7 @@ class MAPFEnv(gym.Env):
 		action   = action_input[1]
 		message  = action_input[2]
 
-		#Put the action in the action buffer
-		# self.world.actions_buffer[agent_id - 1] = action
-
-		# #Put the message in the message buffer
-		# #jth message is being sent TO agent j
-		# #therefore we put jth message in (agent_id - 1, j) 
-		# for a in range(1, self.num_agents + 1):
-		# 	if a == agent_id:
-		# 		self.world.msg_buffer[agent_id - 1, a - 1,: ] = np.zeros(msg_length)
-		# 	else:
-		# 		# if a == 1:
-		# 		# 	print('agent ',agent_id,' placing ',messages[a - 1],' in msg buffer')
-		# 		self.world.msg_buffer[agent_id - 1,a - 1,:] = messages[a - 1]
-
-		# put message from agent in message buffer
+		
 
 		self.world.msg_buffer[agent_id-1,:] = message
 
@@ -865,7 +737,6 @@ class MAPFEnv(gym.Env):
 		#    -1: out of bounds
 		#    -2: collision with wall
 		#    -3: collision with robot
-		# blocking=False
 
 		
 		if action==0:#staying still
@@ -885,55 +756,7 @@ class MAPFEnv(gym.Env):
 
 		self.individual_rewards[agent_id-1]=reward
 
-		# if JOINT:
-		# 	visible=[False for i in range(self.num_agents)]
-		# 	v=0
-		# 	#joint rewards based on proximity
-		# 	for agent in range(1,self.num_agents+1):
-		# 		#tally up the visible agents
-		# 		if agent==agent_id:
-		# 			continue
-		# 		top_left=(self.world.getPos(agent_id)[0]-self.observation_size//2, \
-		# 				  self.world.getPos(agent_id)[1]-self.observation_size//2)
-		# 		pos=self.world.getPos(agent)
-		# 		if pos[0]>=top_left[0] and pos[0]<top_left[0]+self.observation_size\
-		# 			and pos[1]>=top_left[1] and pos[1]<top_left[1]+self.observation_size:
-		# 				#if the agent is within the bounds for observation
-		# 				v+=1
-		# 				visible[agent-1]=True
-			# if v>0:
-			# 	reward=self.individual_rewards[agent_id-1]/2
-			# 	#set the reward to the joint reward if we are 
-			# 	for i in range(self.num_agents):
-			# 		if visible[i]:
-			# 			reward+=self.individual_rewards[i]/(v*2)
-
-
-#         for agent in range(1,self.num_agents+1):
-#             if agent==agent_id:
-#                 continue
-#             if self.world.getPos(agent) != self.world.getGoal(agent):
-#                 reward+=ACTION_COST/self.num_agents
-#        agentEndLocation  = self.world.getPos(agent_id)
-#        newDistance=self.astarCosts[agent_id-1][agentEndLocation[0],agentEndLocation[1]]
-#        oldDistance=self.astarCosts[agent_id-1][agentStartLocation[0],agentStartLocation[1]]
-#        to_goal = 0.5
-#        if(newDistance<oldDistance):
-#            #reward the agent for getting closer
-#            #print("Rewarded agent",agent_id)
-#            to_goal = 1.
-#            if (self.FULL_HELP):#in this mode we reward it for getting closer to the target
-#                reward += .1
-#        elif(newDistance>oldDistance):
-#            #punish the agent for getting further
-#            #print("Punished agent",agent_id)
-#            to_goal = 0.
-#            if (self.FULL_HELP):#in this mode we reward it for getting closer to the target
-#                reward -= .1
-
-		# Perform observation
-		# state = self._observe(agent_id) 
-
+		
 		# Done?
 		done = self.world.done()
 #         if done:
@@ -1089,45 +912,6 @@ class MAPFEnv(gym.Env):
 		self.reset_renderer=False
 		result=self.viewer.render(return_rgb_array = mode=='rgb_array')
 		return result
-# def coordinationRatio(env):
-#     world=env.getObstacleMap()
-#     max_len=0
-#     for a in range(1,env.num_agents+1):
-#         pos=env.world.getPos(a)
-#         goal=env.world.getGoal(a)
-#         try:
-#             path=cpp_mstar.find_path(world,[pos],[goal],1,5)
-#             if len(path)>max_len:
-#                 max_len=len(path)
-#         except NoSolutionError:
-#             print("????")
-#     positions=env.getPositions()
-#     goals=env.getGoals()
-#     try:
-#         path=cpp_mstar.find_path(world,positions,goals,1,15)
-#     except NoSolutionError:
-#         print("????")
-#         path=[]
-#     except OutOfTimeError:
-#         path=[]
-#     return len(path)/max_len
 
-if __name__=='__main__':
-	# n_agents=4
-	# SIZE=10
-	# world0 = np.zeros((SIZE,SIZE))
-	# world0[0,0] = 1
-	# world0[1,1] = 2
-	# world0[2,2] = 3
-	# world0[3,3] = 4
-	# env=MAPFEnv(n_agents,PROB=(.3,.5),SIZE=SIZE,DIAGONAL_MOVEMENT=False)
-	pass
-	# print(coordinationRatio(env))
-#     while True:
-#         time.sleep(.02)
-#         for agent in range(1,n_agents+1):
-#             a=np.random.choice(np.array(env._listNextValidActions(agent)))
-#             a=np.random.randint(0,5)
-#             state, reward, done, nextActions, on_goal, blocking, valid_action=env._step((agent,a))
-#         env._render(screen_width=400,screen_height=400,action_probs=[np.random.rand(5),None])
-# #         env._render()
+
+

@@ -5,7 +5,6 @@ from collections import OrderedDict
 from threading import Lock
 import sys
 from matplotlib.colors import hsv_to_rgb
-# from gym.envs.classic_control import rendering        
 import math
 
 
@@ -271,11 +270,7 @@ class MAPFEnv(gym.Env):
         self.initial_goals = goals
         self.world = State(world,goals,self.DIAGONAL_MOVEMENT,num_agents=self.num_agents)
 
-#        #if self.FULL_HELP:#only compute astar costs if FULL_HELP is enabled
-#         self.astarCosts=[]#list of costs for each agent
-#         for i in range(1,self.num_agents+1):
-#             self.astarCosts.append(self.getAstarCosts(self.world.getPos(i),self.world.getGoal(i)))
-
+#      
     # Returns an observation of an agent
     def _observe_actor(self,agent_id):
         assert(agent_id>0)
@@ -467,41 +462,7 @@ class MAPFEnv(gym.Env):
             costs[i,j]=gScore[i,j]
         return costs
     
-    # def get_blocking_reward(self,agent_id):
-    #     '''calculates how many robots the agent is preventing from reaching goal
-    #     and returns the necessary penalty'''
-    #     def reachable(world,c1,c2,ignore):
-    #         (a,b),(c,d)=c1,c2
-    #         #requires: neither a,b or c,d are in walls
-    #         #returns whether (a,b) is reachable from (c,d), with the option to count any
-    #         #tile(s) as open ("ignore" parameter is a list of tiles to count as empty)
-    #         visited=[]
-    #         def floodfill(c3,c4):
-    #             (i,j),(x,y)=c3,c4
-    #             #determines if (x,y) is reachable from (i,j)
-    #             if (i,j)==(x,y):return True
-    #             if (i,j) in visited: return False
-    #             sx,sy=world.shape[0],world.shape[1]
-    #             if(i<0 or i>=sx or j<0 or j>=sy):#out of bounds, return
-    #                 return False
-    #             if(world[i,j]!=0 and (i,j) not in ignore):return False
-    #             visited.append((i,j))
-    #             return floodfill((i+1,j),(x,y)) or floodfill((i,j+1),(x,y)) or \
-    #                     floodfill((i-1,j),(x,y)) or floodfill((i,j-1),(x,y))
-    #         return floodfill((a,b),(c,d))
-        # #go through each agent, and check
-        # #1 can the agent reach their goal and if not
-        # #2 if we remove ourselves, could they reach their goal
-        # #if 2 is satisfied, we consider ourselves blocking the other agent
-        # num_blocking=0
-        # for agent in range(1,self.num_agents+1):
-        #     if agent==agent_id:continue
-        #     before=reachable(self.world.state,self.world.getPos(agent),self.world.getGoal(agent),[self.world.getPos(agent)])
-        #     if not before:
-        #         after=reachable(self.world.state,self.world.getPos(agent),
-        #                         self.world.getGoal(agent),[self.world.getPos(agent_id),self.world.getPos(agent)])
-        #         if after: num_blocking+=1
-        # return num_blocking*BLOCKING_COST
+   
             
     def isBlocked(self,agent_id):
         def reachable(world,c1,c2,ignore):
@@ -579,10 +540,7 @@ class MAPFEnv(gym.Env):
         if action==0:#staying still
             if action_status == 1:#stayed on goal
                 reward=GOAL_REWARD
-#                 x=self.get_blocking_reward(agent_id)
-#                 reward+=x
-#                 if x<0:
-#                     blocking=True
+
             elif action_status == 0:#stayed off goal
                 reward=IDLE_COST
         else:#moving
@@ -594,27 +552,7 @@ class MAPFEnv(gym.Env):
                 reward=ACTION_COST + CLOSER_REWARD*(d2g - d2g_new)
             else:
                 reward=ACTION_COST + CLOSER_REWARD*(d2g - d2g_new)
-#         for agent in range(1,self.num_agents+1):
-#             if agent==agent_id:
-#                 continue
-#             if self.world.getPos(agent) != self.world.getGoal(agent):
-#                 reward+=ACTION_COST/self.num_agents
-#        agentEndLocation  = self.world.getPos(agent_id)
-#        newDistance=self.astarCosts[agent_id-1][agentEndLocation[0],agentEndLocation[1]]
-#        oldDistance=self.astarCosts[agent_id-1][agentStartLocation[0],agentStartLocation[1]]
-#        to_goal = 0.5
-#        if(newDistance<oldDistance):
-#            #reward the agent for getting closer
-#            #print("Rewarded agent",agent_id)
-#            to_goal = 1.
-#            if (self.FULL_HELP):#in this mode we reward it for getting closer to the target
-#                reward += .1
-#        elif(newDistance>oldDistance):
-#            #punish the agent for getting further
-#            #print("Punished agent",agent_id)
-#            to_goal = 0.
-#            if (self.FULL_HELP):#in this mode we reward it for getting closer to the target
-#                reward -= .1
+
 
         #Add reward to individual_rewards
         self.individual_rewards[agent_id - 1] = reward

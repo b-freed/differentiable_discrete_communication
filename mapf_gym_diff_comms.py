@@ -293,14 +293,7 @@ class MAPFEnv(gym.Env):
             px,py            = int(goal[0]),int(goal[1])
             goal_map_other[px,py] = 1
 
-        # # message mat
-        # msg_mat = []
-
-        # for i in range(self.num_agents):
-        #     if i != agent_id - 1:
-        #         msg_mat.append(self.world.msg_buffer[i,:])
-        # msg_mat = np.array(msg_mat)
-
+       
         return np.stack([pos_map, goal_map_other])#, msg_mat
 
 
@@ -538,10 +531,6 @@ class MAPFEnv(gym.Env):
         if action==0:#staying still
             if action_status == 1:#stayed on goal
                 reward=GOAL_REWARD
-#                 x=self.get_blocking_reward(agent_id)
-#                 reward+=x
-#                 if x<0:
-#                     blocking=True
             elif action_status == 0:#stayed off goal
                 reward=IDLE_COST
         else:#moving
@@ -606,8 +595,7 @@ class MAPFEnv(gym.Env):
             #otherwise we are ok to carry out the action
             available_actions.append(action)
 
-        # if opposite_actions[prev_action] in available_actions:
-        #     available_actions.remove(opposite_actions[prev_action])
+      
 
         return available_actions
 

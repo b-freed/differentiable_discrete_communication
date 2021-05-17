@@ -1,22 +1,4 @@
-###### TODO ###############
-# add as an input recipient_matrix, which is a (sequence of) matricies specifying which agent sends a message to which other agent at next time step.
-    # i.e. if we want agent i to recieve a message from agent j: recipient_matrix[t,i,j] = 1
-    # for simple 2 agent environment in which agents send to eachother (but not themselves), recipient_matrix[t,:,:]=[[0,1],[1,0]]
-    # then, (assuming the msg output of the net denotes the message sent TO each agent at next time step), the final step in message computation
-    # should be to multiply the message outputs of each net by the recipient matrix 
 
-# for discrete comms version:  
-    # add a boolean variable indicating whether we're doing feedforward or backpropping.  
-        # In feedforward mode, we don't need to worry about adding noise, because the environment will do that for us
-        # In backpropping mode, we'll need to add noise, but make sure it's the same noise as what was added as a result of discretization info loss
-    # add a variable epsilon, which will specify 
-
-
-# @Renbo: This is going to be the tricky part.  You'll need to modify the RNN cell I made so that it takes reconstruction error as part of the input.  Probably input will need to become a tuple of (normal input, reconstruction error)
-# Reconstruction error should get added to msg just before it is output.
-# During a rollout (when we're in the work() function), we don't want to add any reconstruction error because the encoding/decoding procedure will do taht for us
-# We only want to add reconstruction error during a training update (when we're in the train() function), considtent with what ever error actually occured during the corresponding time step in the rollout 
-# (which is why we need to keep track of reconstruction error during the rollout.) 
 
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
@@ -40,6 +22,9 @@ def normalized_columns_initializer(std=1.0):
     return _initializer
 
 class ACNet:
+    '''
+    Define actor and critic network
+    '''
     def __init__(self, scope, a_size, num_agents, trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE):
         
         with tf.variable_scope(scope):
@@ -72,34 +57,20 @@ class ACNet:
                                                                     a_size)
         
             if TRAINING:
-                # TODO: this all needs to get modified to deal with multiple agents
-                # self.msg_binary          = tf.placeholder(shape = [None, msg_length], dtype = tf.float32)
-                
+               
                 self.target_v            = tf.placeholder(tf.float32, [None,self.num_agents], 'Vtarget')
                 self.advantages          = tf.placeholder(shape=[None,self.num_agents], dtype=tf.float32)
-                # self.msg_advantages      = tf.placeholder(shape=[None], dtype=tf.float32)
                
                 self.responsible_outputs = tf.reduce_sum(self.policies * self.actions_onehot, [2])
-                # self.responsible_msgs    = tf.reduce_sum(self.P_msg  * self.msg_binary,     [1])
-                # self.log_prob_msgs       = tf.reduce_sum(self.msg_binary*tf.log(tf.clip_by_value(self.P_msg,1e-15,1.0)) + (1-self.msg_binary)*tf.log(tf.clip_by_value(1 - self.P_msg,1e-15,1.0)), axis=1) 
-
+               
                 # Loss Functions
                 with tf.name_scope('c_loss'):
                     self.c_loss    = tf.reduce_sum(tf.square(self.target_v - self.values))
 
                 # something to encourage exploration
                 self.entropy       = - tf.reduce_sum(self.policies * tf.log(tf.clip_by_value(self.policies,1e-10,1.0)))/self.num_agents
-                # self.msg_entropy   = - tf.reduce_sum(self.P_msg  * tf.log(tf.clip_by_value(self.P_msg, 1e-10,1.0)))
-                # self.msg_entropy   = - tf.reduce_sum(self.P_msg * tf.log(tf.clip_by_value(self.P_msg, 1e-15,1.0)) + (1-self.P_msg) * (tf.log(tf.clip_by_value(1 - self.P_msg, 1e-15,1.0))))
                 self.policy_loss   = - tf.reduce_sum(tf.log(tf.clip_by_value(self.responsible_outputs,1e-15,1.0)) * self.advantages)
-                # self.msg_loss      = - tf.reduce_sum(tf.log(tf.clip_by_value(self.responsible_msgs,   1e-15,1.0)) * self.msg_advantages)
-                # self.msg_loss      = - tf.reduce_sum(self.log_prob_msgs * self.msg_advantages)
                 
-                # self.blocking_loss = - tf.reduce_sum(self.target_blockings*tf.log(tf.clip_by_value(self.blocking,1e-10,1.0))\
-                #                           +(1-self.target_blockings)*tf.log(tf.clip_by_value(1-self.blocking,1e-10,1.0)))
-                # self.on_goal_loss   = - tf.reduce_sum(self.target_on_goals*tf.log(tf.clip_by_value(self.on_goal,1e-10,1.0))\
-                                      # +(1-self.target_on_goals)*tf.log(tf.clip_by_value(1-self.on_goal,1e-10,1.0)))
-                # self.msg_loss      = - tf.reduce_sum(self.log_prob_msgs  * tf.expand_dims(self.msg_advantages, axis = 1))
                 with tf.name_scope('a_loss'):
                     self.a_loss          = self.policy_loss - self.entropy * 0.01 #+ 0.25*self.blocking_loss #+ self.msg_loss
 
@@ -128,30 +99,19 @@ class ACNet:
 
         with tf.variable_scope('actor'):
 
-            # TODO: check that this reshaping actually works properly
-            # First step is to squash the axes corresponding to time and agent into 1, because apparently conv2d can't deal with 2 extra axes
             # Reshape so that instead of [T,#agents,...] it's [T*#agents,...]
             actor_inputs_reshaped = tf.reshape(actor_inputs, [-1,GRID_SIZE,GRID_SIZE,2])       
             conv1_actor    =  layers.conv2d(inputs=actor_inputs_reshaped,   padding="SAME", num_outputs=RNN_SIZE//4,  kernel_size=[3, 3],   stride=1, data_format="NHWC", weights_initializer=w_init,activation_fn=tf.nn.relu)
             conv1a_actor   =  layers.conv2d(inputs=conv1_actor,   padding="SAME", num_outputs=RNN_SIZE//4,  kernel_size=[3, 3],   stride=1, data_format="NHWC", weights_initializer=w_init,activation_fn=tf.nn.relu)
             conv1a_actor_reshaped = tf.reshape(conv1a_actor, [-1,self.num_agents,conv1a_actor.shape[1]*conv1a_actor.shape[2]*conv1a_actor.shape[3]]) 
-            # conv1a_actor_reshaped is now of shape [T, #agents, blah]
-            # recon_error is of shape [T, #agents, blahblah]
+            
             # We need to concatenate them along axis=2
             rnn_in_actor   = tf.concat([conv1a_actor_reshaped, recon_error], axis=2)
-            # rnn_in_actor = tf.expand_dims(h1_actor,[1])
-            # rnn_in_actor = tf.reshape(h1_actor, [actor_inputs.shape[0],self.num_agents,-1])#tf.reshape(h1_actor, [-1,self.num_agents,h1_actor.shape[1]])
             
-            # print('rnn_in_actor.shape: ',rnn_in_actor.shape)
-
 
             routing_cell = RoutingRNN(RNN_SIZE, MSG_REPR_SIZE, self.num_agents, a_size, msg_length)
-            # routing_cell = MyBasicRNNCell(100)
             seq_length = tf.shape(actor_inputs)[:1]
-            # print('seq_length.shape: ',seq_length.shape)
-
-            # msgs_in = tf.placeholder(shape=[1, self.num_agents, msg_length], dtype = tf.float32) #shape of message
-
+            
             self.msgs_in = tf.placeholder(shape = [self.num_agents,msg_length], dtype = tf.float32)
 
             rnn_output, msgs_out = tf.nn.dynamic_rnn(routing_cell, rnn_in_actor, initial_state=self.msgs_in, dtype = tf.float32,time_major=True)
@@ -184,7 +144,6 @@ class ACNet:
 
         return policies, msgs_out, values
 
-#TODO: modify this such that the recipient matrix is part of input (so it can change between time steps)
 
 class RoutingRNN(tf.nn.rnn_cell.RNNCell):
 
@@ -202,9 +161,7 @@ class RoutingRNN(tf.nn.rnn_cell.RNNCell):
         self._msg_length = msg_length
         self._msg_repr_size = msg_repr_size
         self._a_size     = a_size
-        # self._activation = activation or math_ops.tanh
-        # self._linear = None
-
+        
     @property
     def state_size(self):
         # return (1,self._num_agents, self._msg_length) #the leading 1 is because tf wants RNN inputs to be in shape (batch_size, time, etc...)
@@ -247,33 +204,3 @@ class RoutingRNN(tf.nn.rnn_cell.RNNCell):
             
         return policy, msg_out
 
-# class MyBasicRNNCell(tf.nn.rnn_cell.RNNCell):
-#     '''
-#     Args:
-#       inputs: `2-D` tensor with shape `[batch_size, input_size]`.
-#       state: if `self.state_size` is an integer, this should be a `2-D Tensor`
-#         with shape `[batch_size, self.state_size]`.  Otherwise, if
-#         `self.state_size` is a tuple of integers, this should be a tuple
-#         with shapes `[batch_size, s] for s in self.state_size`.
-#     '''
-
-#     def __init__(self, num_units, activation=None, reuse=None):
-#         super(MyBasicRNNCell, self).__init__(_reuse=reuse)
-#         self._num_units = num_units
-        
-
-#     @property
-#     def state_size(self):
-#         return self._num_units
-
-#     @property
-#     def output_size(self):
-#         return self._num_units
-
-#     def call(self, inputs, state):
-#         """Most basic RNN: output = new_state = act(W * input + U * state + B)."""
-        
-
-#         output = layers.fully_connected(inputs, num_outputs = self._num_units)
-#         msgs = tf.reverse(output,[0])
-#         return output,msgs

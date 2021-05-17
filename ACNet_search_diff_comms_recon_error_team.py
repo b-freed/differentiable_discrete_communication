@@ -22,6 +22,9 @@ ENV_DIMENSION          = 2
 #     return _initializer
 
 class ACNet:
+    '''
+    Define actor and critic network
+    '''
     def __init__(self, scope, a_size, num_agents, trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE):
         with tf.variable_scope(scope):
             #The input size may require more work to fit the interface.
@@ -102,10 +105,7 @@ class ACNet:
             policies = tf.squeeze(rnn_output)
             rnn_state_out = state_out[:,:HIDDEN_STATE_SIZE] # first HIDDEN_STATE_SIZE elements of state_out correspond to rnn hidden state
             msgs_out      = state_out[:,HIDDEN_STATE_SIZE:] # The rest of the elements are messages TO each agent 
-            #agents_pos[[1,2]] = agents_pos[[2,1]]
-            #agents_pos = tf.gather(agents_pos, [0,2,1,3], axis = 0)
-            #msgs_out      = tf.concat([msgs_out, agents_pos], axis = -1)
-
+            
         with tf.variable_scope('critic'):
 
             critic_inputs_reshaped = tf.reshape(critic_inputs, [-1,N_CHANNELS_CRITIC,GRID_SIZE,GRID_SIZE])

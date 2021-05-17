@@ -1,10 +1,4 @@
-#TODO:
 
-    #can get rid of recipeint set
-    
-#change code around observations because we no longer have 2 part observations, it's just one big matrix
-
-#this should be the thing, right?
 from __future__ import division
 
 import gym
@@ -13,26 +7,19 @@ import random
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import matplotlib.pyplot as plt
-# from od_mstar3 import cpp_mstar
-# from od_mstar3.col_set_addition import OutOfTimeError,NoSolutionError
 import threading
 import time
 import scipy.signal as signal
 import os
 import GroupLock
 import multiprocessing
-#%matplotlib inline
 import mapf_gym_search_diff_comms as mapf_gym
 import pickle
-# import imageio
 from ACNet_search_diff_comms_recon_error_circle import ACNet
 
 from tensorflow.python.client import device_lib
 dev_list = device_lib.list_local_devices()
 print(dev_list)
-# assert len(dev_list) > 1 #is this necessary?
-
-
 
 
 def make_gif(images, fname, duration=2, true_image=False,salience=False,salIMGS=None):
@@ -55,14 +42,14 @@ def discount(x, gamma):
 
 def good_discount(x, gamma):
     return discount(x,gamma)
-#     positive = np.clip(x,0,None)
-#     negative = np.clip(x,None,0)
-#     return signal.lfilter([1], [1, -gamma], positive[::-1], axis=0)[::-1]+negative
 
 
 
 
 class Worker:
+    '''
+    worker class to contain an instantiation of the environment and the agents inside
+    '''
     def __init__(self, game, metaAgentID, a_size):
         self.workerID = metaAgentID
         self.env = game
@@ -71,9 +58,7 @@ class Worker:
 
         self.nextGIF = episode_count # For GIFs output
         #Create the local copy of the network and the tensorflow op to copy global parameters to local network
-        #                        scope, a_size,      num_agents,     trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE
         self.local_AC = ACNet(self.name,a_size, self.env.num_agents, trainer_A,trainer_C,True,GRID_SIZE,GLOBAL_NET_SCOPE)
-#         self.copy_weights = self.local_AC.homogenize_weights
         self.pull_global = update_target_graph(GLOBAL_NET_SCOPE, self.name)
 
         # logging stuff for tensorboard
@@ -83,7 +68,6 @@ class Worker:
         self.episode_invalid_ops = []
         
     def train(self, rollout, sess, gamma, bootstrap_values,imitation=False):
-        #TODO: consider making action_advantages_all a global variable that each agent fills in with their own action advantages.  This would allow us to only calculate each one once
         global episode_count, advantages_buffer
 
 
@@ -153,45 +137,6 @@ class Worker:
             feed_dict=feed_dict)
 
 
-        
-        
-        # feed_dict = {
-        #     global_step:episode_count,
-        #     self.local_AC.target_v:np.stack(discounted_rewards[:T]),
-        #     self.local_AC.actor_inputs:np.stack(observations_actor[:T]),
-        #     self.local_AC.critic_inputs:np.stack(observations_critic[:T]),
-        #     self.local_AC.msgs_binary:np.stack(msgs_binary[:T]),
-        #     self.local_AC.actions:actions[:T],
-        #     self.local_AC.train_valid:np.stack(valids[:T]),
-        #     self.local_AC.action_advantages:action_advantages,
-        #     self.local_AC.msg_advantages:msg_advantages,
-        #     # self.local_AC.train_value:train_value,
-        #     # self.local_AC.target_blockings:blockings,
-        #     self.local_AC.target_on_goals:on_goals[:T],
-        #     self.local_AC.state_in_actor[0]:rnn_state_actor[0],
-        #     self.local_AC.state_in_actor[1]:rnn_state_actor[1],
-        #     self.local_AC.state_in_critic[0]:rnn_state_critic[0],
-        #     self.local_AC.state_in_critic[1]:rnn_state_critic[1]
-
-        # }
-        
-        # v_l,p_l,msg_l,valid_l,og_l,e_l,e_msg,gn_a,gn_c,vn_a,vn_c,_,_ = sess.run([
-        #     self.local_AC.c_loss,
-        #     self.local_AC.policy_loss,
-        #     self.local_AC.msg_loss,
-        #     self.local_AC.valid_loss,
-        #     self.local_AC.on_goal_loss,
-        #     self.local_AC.entropy,
-        #     self.local_AC.msg_entropy,
-        #     self.local_AC.a_grad_norms,
-        #     self.local_AC.c_grad_norms,
-        #     self.local_AC.a_var_norms,
-        #     self.local_AC.c_var_norms,
-        #     # self.local_AC.blocking_loss,
-        #     self.local_AC.apply_a_grads,
-        #     self.local_AC.apply_c_grads],
-        #     feed_dict=feed_dict)
-
        
         return v_l/len(rollout), p_l/len(rollout), e_l/len(rollout), gn_a, gn_c, vn_a, vn_c
 
@@ -206,8 +151,6 @@ class Worker:
         '''
         msg: array of shape [#agents, msg_length, 2] representing msg to be perturbed (rotated)
         theta: array of shape [#agents, msg_length] representing angle to perturb (rotate) msg by
-
-        this is a slightly unfortunate way to implement this, but I didn't want to have to futz around with array dimensions
         '''
 
         x = msg[:,:,0]
@@ -322,7 +265,7 @@ class Worker:
             msg = decode_for_channel_noise(msg, rand_arr, method = "perm")
             return msg
         
-        # @Jeff: noisy channel
+        
         #here we process the encoded msg such that we can add noise to it
         np.random.seed(int(time.time()))
         new_msgs = []
@@ -349,12 +292,9 @@ class Worker:
                     invalid += 1
             
         else:
-            # TODO
             raise NotImplementedError
 
-        # TODO: figure out what to do about conditioning the ciritc on actions? Maybe not necessary
-        # action_map = self.env._observe_action_map(self.agentID,action_buffer[self.metaAgentID])
-
+        
         v = sess.run(self.local_AC.values, 
                     feed_dict={self.local_AC.critic_inputs:[np.stack(s_critics)]})
         
@@ -405,11 +345,7 @@ class Worker:
                 #runs for single episode
                 while (not self.env.finished): # Give me something!
                     
-                    #actions,new_msgs_out,v,rnn_state_out,invalid,recon_error
-
-                    # old_msgs = msgs.copy()
-                    # rnn_state_old = rnn_state.copy()
-
+                   
                     actions,msgs,v,rnn_state,invalid, recon_error = self.choose_action_msg(s_actors,
                                                                         s_critics,
                                                                         msgs,
@@ -417,26 +353,9 @@ class Worker:
                                                                         validActions,
                                                                         TRAINING)
 
-                    #############################################################
-                    ## for testing purposes
-                    # if self.workerID == 0:
-                    #     policies_test, msgs_out_test = sess.run([self.local_AC.policies,
-                    #                    self.local_AC.msgs_out], 
-                    #                    feed_dict={self.local_AC.actor_inputs:[np.stack(s_actors)],
-                    #                               self.local_AC.msgs_in:old_msgs,
-                    #                               self.local_AC.reconstruction_error:[recon_error],
-                    #                               self.local_AC.rnn_state_in:rnn_state_old})
-
-                    #     print('policies_test: ', policies_test)
-                    #     print('msgs_out_test: ', msgs_out_test)
-                    #############################################################
-                   
-
-
                     #keep track of how many times agents attempt to take "invalid" actions
                     episode_inv_count += invalid
 
-                    #TODO: should probably shuffle order in which agents get to step
                     for agent in range(1,self.env.num_agents + 1):
                         
                         _ = self.env._step((agent, actions[agent - 1]),episode=episode_count)
@@ -445,7 +364,6 @@ class Worker:
 
                     r = self.env.compute_reward()  #get shared reward after all agents have stepped
 
-                    # get observatins for each agent
 
 
                     s1_actors = []
@@ -453,7 +371,6 @@ class Worker:
                     validActions = []
 
                     for a in range(1,self.env.num_agents+1):
-                        #observe world from each agent's perspectives
                         s1_actors.append(self.env._observe_actor(a))
                         s1_critics.append(self.env._observe_critic(a))
                         validActions.append(self.env._listNextValidActions)
@@ -463,7 +380,6 @@ class Worker:
                     if saveGIF:
                         episode_frames.append(self.env._render(mode='rgb_array',screen_width=900,screen_height=900))
 
-                   # @Renbo: we'll need to add reconstruction error to this episode buffer.  This is where we store up all the data we need for training.
                     episode_buffer.append([s_actors,s_critics,actions,r,d,v,recon_error])
                     episode_values.append(v)
                     episode_reward += r
@@ -541,15 +457,7 @@ class Worker:
                 # TODO: sort this all out
                 if not TRAINING:
                     raise NotImplementedError
-#                     mutex.acquire()
-#                     if episode_count < NUM_EXPS:
-#                         plan_durations[episode_count] = episode_step_count
-#                     if self.workerID == 1:
-#                         episode_count += 1
-#                         print('({}) Thread {}: {} steps, {:.2f} reward ({} invalids).'.format(episode_count, self.workerID, episode_step_count, episode_reward, episode_inv_count))
-#                     GIF_episode = int(episode_count)
-# #                    saveGIF &= (episode_step_count < max_episode_length)
-#                     mutex.release()
+#                     
                 else:
                     episode_count+=1./num_workers
 
@@ -659,10 +567,7 @@ printQ                 = False # (for headless)
 
 
 
-msg_length             = 10                     #the length of the original msg
-# commented out becuase we are defining the NUM_BINS directly now
-# bins_for_msg           = np.arange(-pi, pi, BIN_WIDTH)  #this needs to be changed 
-# NUM_BINS            = bins_for_msg.size - 1                            
+msg_length             = 10                     #the length of the original msg                      
 digit_width            = int(np.ceil(np.log2(NUM_BINS))) #how many bits per number
 bit_length             = digit_width*msg_length #the length of the binary msg
 hamm_start             = 5                      #inclusive
@@ -833,16 +738,7 @@ with tf.device("/device:GPU:0"):
 
         # Create groupLock
         workerNames = ["worker_"+str(i) for i in range(n,n+num_workers)]
-        # groupLock = GroupLock.GroupLock([workerNames,workerNames])
-        # groupLocks.append(groupLock)
-
-        # Create worker classes
-        # workersTmp = []
-        # for i in range(ma*num_workers+1,(ma+1)*num_workers+1):
-        #     workersTmp.append(Worker(gameEnv,ma,n,a_size,groupLock))
-        #     n+=1
-        # workers.append(workersTmp)
-
+       
         workers.append([Worker(gameEnv,ma,a_size)])
 
     global_summary = tf.summary.FileWriter(train_path)

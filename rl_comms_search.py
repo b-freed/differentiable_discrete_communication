@@ -1,5 +1,4 @@
 
-#this should be the thing, right?
 from __future__ import division
 
 import gym
@@ -14,23 +13,11 @@ import scipy.signal as signal
 import os
 import GroupLock
 import multiprocessing
-# get_ipython().run_line_magic('matplotlib', 'inline')
 import mapf_gym_rl_search as mapf_gym
 import pickle
-# import imageio
 from ACNet_rl_search2 import ACNet
-# from ACNet_seperate_1hot_hard_coded_simple import ACNet
 
 from tensorflow.python.client import device_lib
-# dev_list = device_lib.list_local_devices()
-# print(dev_list)
-# assert len(dev_list) > 1
-
-
-# ### Helper Functions
-
-# In[3]:
-
 
 def make_gif(images, fname, duration=2, true_image=False,salience=False,salIMGS=None):
     import moviepy.editor as mpy
@@ -81,14 +68,6 @@ def discount(x, gamma):
 
 def good_discount(x, gamma):
     return discount(x,gamma)
-#     positive = np.clip(x,0,None)
-#     negative = np.clip(x,None,0)
-#     return signal.lfilter([1], [1, -gamma], positive[::-1], axis=0)[::-1]+negative
-
-
-# ## Worker Agent
-
-# In[4]:
 
 
 class Worker:
@@ -162,7 +141,6 @@ class Worker:
         num_samples = min(EPISODE_SAMPLES,len(action_advantages))
         sampleInd = np.sort(np.random.choice(action_advantages.shape[0], size=(num_samples,), replace=False))
 
-        # print('observations_critic[:len(action_advantages).shape: ',observations_critic[:len(action_advantages)].shape)
         rnn_state_actor = self.local_AC.state_init_actor
 
         feed_dict = {
@@ -210,12 +188,7 @@ class Worker:
         self.groupLock.acquire(int(not self.lock_bool),self.name)
         self.lock_bool=not self.lock_bool
    
-    # def sample_msg_1hot(self, P_msg):
-    #     msg = np.random.choice(len(P_msg.flatten()),p=P_msg.flatten())
-    #     msg_1hot = np.zeros(len(P_msg.flatten()))
-    #     msg_1hot[msg] = 1
 
-    #     return msg_1hot
 
     def sample_msg_binary(self, P_msg):
         rands = np.random.uniform(size = P_msg.shape)
@@ -240,13 +213,8 @@ class Worker:
                                                 self.local_AC.msg_inputs:[s_actor[1]],
                                                 self.local_AC.state_in_actor:rnn_state_actor})
 
-        # print('P_msg: ', P_msg)
         msg_binary = self.sample_msg_binary(P_msg)
-        # assert np.sum(msg_1hot) == 1
-        # print('msg_binary: ', msg_binary)
-        # print('msg_entropy: ',msg_entropy)
-
-        
+       
 
         if(not (np.argmax(a_dist.flatten()) in validActions)):
             invalid = True
@@ -261,27 +229,19 @@ class Worker:
         valid_dist /= np.sum(valid_dist)
 
         if TRAINING:
-            # if (pred_blocking.flatten()[0] < 0.5) == blocking:
-            #     wrong_blocking += 1
-            # a           = validActions[ np.random.choice(range(valid_dist.shape[1]),p=valid_dist.ravel()) ]
             a = np.random.choice(a_size, p = a_dist.flatten())
-            # train_val   = 1.
+            
         else:
             a         = np.argmax(a_dist.flatten())
             if a not in validActions or not GREEDY:
                 a     = validActions[ np.random.choice(range(valid_dist.shape[1]),p=valid_dist.ravel()) ]
-            # train_val = 1.
-
+            
         action_buffer[self.metaAgentID][self.agentID - 1] = a
 
 
 
         self.synchronize()
-        # print('action_buffer: ', action_buffer)
-        # print('self.metaAgentID: ',self.metaAgentID)
-
-        # print('action_buffer[self.metaAgentID][other_agentID - 1]: ',action_buffer[self.metaAgentID][other_agentID - 1])
-
+        
 
         v = sess.run(self.local_AC.value, 
                     feed_dict={self.local_AC.critic_inputs:[s_critic],
@@ -312,8 +272,7 @@ class Worker:
                 episode_reward = episode_step_count = episode_inv_count = 0
                 d = False
 
-                # Initial state from the environment
-#                 validActions, on_goal = self.env._reset(self.agentID)
+                
                 validActions, _,blocking = self.env._reset(self.agentID)
                 s_actor                     = self.env._observe_actor(self.agentID)
                 s_critic               = self.env._observe_critic(self.agentID)
@@ -334,8 +293,6 @@ class Worker:
                 swarm_reward[self.metaAgentID] = 0
 
                 while (not self.env.finished): # Give me something!
-                    #Take an action using probabilities from policy network output.
-                   #a,msg_binary,v,rnn_state_actor,invalid
                     a,msg_binary,v,rnn_state_actor,invalid = self.choose_action_msg(s_actor,s_critic,rnn_state_actor, validActions, TRAINING)
 
                     if invalid:
@@ -372,14 +329,11 @@ class Worker:
                     s_actor = s1_actor
                     s_critic = s1_critic
                     total_steps += 1
-#                     steps_on_goal += int(on_goal)
-#                     on_goal = on_goal1
                     episode_step_count += 1
 
                     if r>0:
                         RewardNb += 1
                     if d == True:
-#                         s1 = s  #Oh yeah!! We are done, we did it!!!
                         print('\n{} Goodbye World. We did it!'.format(episode_step_count), end='\n')
 
                     # If the episode hasn't ended, but the experience buffer is full, then we
@@ -396,9 +350,6 @@ class Worker:
                             #place this state's value in the value buffer
                             value_buffer[self.metaAgentID][self.agentID - 1] = v
 
-                            # if TRAINING:
-                            #     if (pred_blocking.flatten()[0] < 0.5) == blocking:
-                            #         wrong_blocking += 1
 
                             self.synchronize() # synchronize starting time of the threads
 
@@ -406,8 +357,7 @@ class Worker:
                             
                             s1Values[i_buf][0] = value_buffer[self.metaAgentID][self.agentID - 1]
                             s1Values[i_buf][1] = value_buffer[self.metaAgentID][other_agentID - 1]
-                            
-                        #if the episode is done, the bootstrap values are 0
+
                         else:
                             s1Values[i_buf][:] = 0
 
@@ -434,8 +384,6 @@ class Worker:
                         i_buf = (i_buf + 1) % NUM_BUFFERS
                         episode_buffers[i_buf] = []
 
-                       # sess.run(self.pull_global)
-#                         sess.run(self.copy_weights)
 
                     self.synchronize()
                     sess.run(self.pull_global)
@@ -445,10 +393,6 @@ class Worker:
                 episode_lengths[self.metaAgentID].append(episode_step_count)
                 episode_mean_values[self.metaAgentID].append(np.nanmean(episode_values))
                 episode_invalid_ops[self.metaAgentID].append(episode_inv_count)
-                # episode_wrong_blocking[self.metaAgentID].append(wrong_blocking)
-                # episode_msg_entropies[self.metaAgentID].append(e_msg)
-                # episode_msg_losses[self.metaAgentID].append(msg_l)
-#                 episode_steps_on_goal[self.metaAgentID].append(steps_on_goal)
 
                 # Periodically save gifs of episodes, model parameters, and summary statistics.
                 if episode_count % EXPERIENCE_BUFFER_SIZE == 0 and printQ:
@@ -483,10 +427,6 @@ class Worker:
                         mean_length = np.mean(episode_lengths[self.metaAgentID][-SL:])
                         mean_value = np.mean(episode_mean_values[self.metaAgentID][-SL:])
                         mean_invalid = np.mean(episode_invalid_ops[self.metaAgentID][-SL:])
-                        # mean_wrong_blocking = np.mean(episode_wrong_blocking[self.metaAgentID][-SL:])
-                        # mean_msg_entropy = np.mean(episode_msg_entropies[self.metaAgentID][-SL:])
-                        # mean_msg_loss = np.mean(episode_msg_losses[self.metaAgentID][-SL:])
-#                         mean_steps_on_goal = np.mean(episode_steps_on_goal[self.metaAgentID][-SL:])
                         current_learning_rate_actor = sess.run(lr_a,feed_dict={global_step:episode_count})
                         current_learning_rate_critic = sess.run(lr_c,feed_dict={global_step:episode_count})
 
@@ -497,13 +437,8 @@ class Worker:
                         summary.value.add(tag='Perf/Reward', simple_value=mean_reward)
                         summary.value.add(tag='Perf/Length', simple_value=mean_length)
                         summary.value.add(tag='Perf/Valid Rate', simple_value=(mean_length-mean_invalid)/mean_length)
-                        # summary.value.add(tag='Perf/Blocking Prediction Accuracy', simple_value=(mean_length-mean_wrong_blocking)/mean_length)
-#                         summary.value.add(tag='Perf/On_Goal Rate', simple_value=mean_steps_on_goal/mean_length)
-
                         summary.value.add(tag='Losses/Value Loss', simple_value=v_l)
                         summary.value.add(tag='Losses/Policy Loss', simple_value=p_l)
-                        # summary.value.add(tag='Losses/Blocked Loss', simple_value=b_l)
-                        # summary.value.add(tag='Losses/Valid Loss', simple_value=valid_l)
                         summary.value.add(tag='Losses/Actor Grad Norm', simple_value=gn_a)
                         summary.value.add(tag='Losses/Critic Grad Norm', simple_value=gn_c)
                         summary.value.add(tag='Losses/Actor Var Norm', simple_value=vn_a)
@@ -530,10 +465,6 @@ class Worker:
                     with open('gifs3D/episode_{}.dat'.format(GIF_episode), 'wb') as file:
                         pickle.dump(episode_buffer, file)
 
-
-# ## Training
-
-# In[5]:
 
 
 # Learning parameters
@@ -580,10 +511,8 @@ episode_rewards        = [ [] for _ in range(NUM_META_AGENTS) ]
 episode_lengths        = [ [] for _ in range(NUM_META_AGENTS) ]
 episode_mean_values    = [ [] for _ in range(NUM_META_AGENTS) ]
 episode_invalid_ops    = [ [] for _ in range(NUM_META_AGENTS) ]
-# episode_wrong_blocking = [ [] for _ in range(NUM_META_AGENTS) ]
 value_buffer           = [ [] for _ in range(NUM_META_AGENTS) ]
 action_buffer          = [ [] for _ in range(NUM_META_AGENTS) ]
-# episode_steps_on_goal  = [ [] for _ in range(NUM_META_AGENTS) ]
 printQ                 = False # (for headless)
 swarm_reward           = [0]*NUM_META_AGENTS
 

@@ -1,22 +1,4 @@
-###### TODO ###############
-# add as an input recipient_matrix, which is a (sequence of) matricies specifying which agent sends a message to which other agent at next time step.
-    # i.e. if we want agent i to recieve a message from agent j: recipient_matrix[t,i,j] = 1
-    # for simple 2 agent environment in which agents send to eachother (but not themselves), recipient_matrix[t,:,:]=[[0,1],[1,0]]
-    # then, (assuming the msg output of the net denotes the message sent TO each agent at next time step), the final step in message computation
-    # should be to multiply the message outputs of each net by the recipient matrix 
 
-# for discrete comms version:  
-    # add a boolean variable indicating whether we're doing feedforward or backpropping.  
-        # In feedforward mode, we don't need to worry about adding noise, because the environment will do that for us
-        # In backpropping mode, we'll need to add noise, but make sure it's the same noise as what was added as a result of discretization info loss
-    # add a variable epsilon, which will specify 
-
-
-# @Renbo: This is going to be the tricky part.  You'll need to modify the RNN cell I made so that it takes reconstruction error as part of the input.  Probably input will need to become a tuple of (normal input, reconstruction error)
-# Reconstruction error should get added to msg just before it is output.
-# During a rollout (when we're in the work() function), we don't want to add any reconstruction error because the encoding/decoding procedure will do taht for us
-# We only want to add reconstruction error during a training update (when we're in the train() function), considtent with what ever error actually occured during the corresponding time step in the rollout 
-# (which is why we need to keep track of reconstruction error during the rollout.) 
 
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
@@ -40,6 +22,9 @@ def normalized_columns_initializer(std=1.0):
     return _initializer
 
 class ACNet:
+    '''
+    Define actor and critic network
+    '''
     def __init__(self, scope, a_size, num_agents, trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE):
         
         with tf.variable_scope(scope):
@@ -247,33 +232,3 @@ class RoutingRNN(tf.nn.rnn_cell.RNNCell):
             
         return policy, msg_out
 
-# class MyBasicRNNCell(tf.nn.rnn_cell.RNNCell):
-#     '''
-#     Args:
-#       inputs: `2-D` tensor with shape `[batch_size, input_size]`.
-#       state: if `self.state_size` is an integer, this should be a `2-D Tensor`
-#         with shape `[batch_size, self.state_size]`.  Otherwise, if
-#         `self.state_size` is a tuple of integers, this should be a tuple
-#         with shapes `[batch_size, s] for s in self.state_size`.
-#     '''
-
-#     def __init__(self, num_units, activation=None, reuse=None):
-#         super(MyBasicRNNCell, self).__init__(_reuse=reuse)
-#         self._num_units = num_units
-        
-
-#     @property
-#     def state_size(self):
-#         return self._num_units
-
-#     @property
-#     def output_size(self):
-#         return self._num_units
-
-#     def call(self, inputs, state):
-#         """Most basic RNN: output = new_state = act(W * input + U * state + B)."""
-        
-
-#         output = layers.fully_connected(inputs, num_outputs = self._num_units)
-#         msgs = tf.reverse(output,[0])
-#         return output,msgs

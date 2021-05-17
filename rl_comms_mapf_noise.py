@@ -1,5 +1,4 @@
 
-#this should be the thing, right?
 from __future__ import division
 
 import gym
@@ -14,22 +13,12 @@ import scipy.signal as signal
 import os
 import GroupLock
 import multiprocessing
-# get_ipython().run_line_magic('matplotlib', 'inline')
 import mapf_gym_hidden_agent_bitstring_credit_assignment as mapf_gym
 import pickle
 from ACNet_comms_hidden_agent_bitstring_credit_assignment import ACNet
 # from ACNet_seperate_1hot_hard_coded_simple import ACNet
 
 from tensorflow.python.client import device_lib
-# dev_list = device_lib.list_local_devices()
-# print(dev_list)
-# assert len(dev_list) > 1
-
-
-# ### Helper Functions
-
-# In[3]:
-
 
 def make_gif(images, fname, duration=2, true_image=False,salience=False,salIMGS=None):
     import moviepy.editor as mpy
@@ -80,17 +69,12 @@ def discount(x, gamma):
 
 def good_discount(x, gamma):
     return discount(x,gamma)
-#     positive = np.clip(x,0,None)
-#     negative = np.clip(x,None,0)
-#     return signal.lfilter([1], [1, -gamma], positive[::-1], axis=0)[::-1]+negative
-
-
-# ## Worker Agent
-
-# In[4]:
 
 
 class Worker:
+    '''
+    worker class to contain an instantiation of the environment and the agents inside
+    '''
     def __init__(self, game, metaAgentID, workerID, a_size, groupLock):
         self.workerID = workerID
         self.env = game
@@ -100,9 +84,7 @@ class Worker:
         self.groupLock = groupLock
 
         self.nextGIF = episode_count # For GIFs output
-        #Create the local copy of the network and the tensorflow op to copy global parameters to local network
         self.local_AC = ACNet(self.name,a_size,trainer_A,trainer_C,True,GRID_SIZE,GLOBAL_NET_SCOPE)
-#         self.copy_weights = self.local_AC.homogenize_weights
         self.pull_global = update_target_graph(GLOBAL_NET_SCOPE, self.name)
 
     def train(self, rollout, sess, gamma, bootstrap_values):
@@ -167,7 +149,6 @@ class Worker:
         num_samples = min(EPISODE_SAMPLES,len(action_advantages))
         sampleInd = np.sort(np.random.choice(action_advantages.shape[0], size=(num_samples,), replace=False))
 
-        # print('observations_critic[:len(action_advantages).shape: ',observations_critic[:len(action_advantages)].shape)
         
         feed_dict = {
             global_step:episode_count,
@@ -217,12 +198,7 @@ class Worker:
         self.groupLock.acquire(int(not self.lock_bool),self.name)
         self.lock_bool=not self.lock_bool
    
-    # def sample_msg_1hot(self, P_msg):
-    #     msg = np.random.choice(len(P_msg.flatten()),p=P_msg.flatten())
-    #     msg_1hot = np.zeros(len(P_msg.flatten()))
-    #     msg_1hot[msg] = 1
-
-    #     return msg_1hot
+   
 
     def sample_msg_binary(self, P_msg):
         rands = np.random.uniform(size = P_msg.shape)
@@ -281,11 +257,7 @@ class Worker:
 
 
         self.synchronize()
-        # print('action_buffer: ', action_buffer)
-        # print('self.metaAgentID: ',self.metaAgentID)
-
-        # print('action_buffer[self.metaAgentID][other_agentID - 1]: ',action_buffer[self.metaAgentID][other_agentID - 1])
-
+        
 
         v = sess.run(self.local_AC.value, 
                     feed_dict={self.local_AC.critic_inputs:[s_critic],
@@ -403,9 +375,7 @@ class Worker:
                             #place this state's value in the value buffer
                             value_buffer[self.metaAgentID][self.agentID - 1] = v
 
-                            # if TRAINING:
-                            #     if (pred_blocking.flatten()[0] < 0.5) == blocking:
-                            #         wrong_blocking += 1
+                           
 
                             self.synchronize() # synchronize starting time of the threads
 
@@ -453,11 +423,7 @@ class Worker:
                 episode_mean_values[self.metaAgentID].append(np.nanmean(episode_values))
                 episode_invalid_ops[self.metaAgentID].append(episode_inv_count)
                 episode_wrong_blocking[self.metaAgentID].append(wrong_blocking)
-                # episode_msg_entropies[self.metaAgentID].append(e_msg)
-                # episode_msg_losses[self.metaAgentID].append(msg_l)
-#                 episode_steps_on_goal[self.metaAgentID].append(steps_on_goal)
-
-                # Periodically save gifs of episodes, model parameters, and summary statistics.
+               
                 if episode_count % EXPERIENCE_BUFFER_SIZE == 0 and printQ:
                     print('                                                                                   ', end='\r')
                     print('{} Episode terminated ({},{})'.format(episode_count, self.agentID, RewardNb), end='\r')
@@ -491,9 +457,6 @@ class Worker:
                         mean_value = np.mean(episode_mean_values[self.metaAgentID][-SL:])
                         mean_invalid = np.mean(episode_invalid_ops[self.metaAgentID][-SL:])
                         mean_wrong_blocking = np.mean(episode_wrong_blocking[self.metaAgentID][-SL:])
-                        # mean_msg_entropy = np.mean(episode_msg_entropies[self.metaAgentID][-SL:])
-                        # mean_msg_loss = np.mean(episode_msg_losses[self.metaAgentID][-SL:])
-#                         mean_steps_on_goal = np.mean(episode_steps_on_goal[self.metaAgentID][-SL:])
                         current_learning_rate_actor = sess.run(lr_a,feed_dict={global_step:episode_count})
                         current_learning_rate_critic = sess.run(lr_c,feed_dict={global_step:episode_count})
 
@@ -505,7 +468,6 @@ class Worker:
                         summary.value.add(tag='Perf/Length', simple_value=mean_length)
                         summary.value.add(tag='Perf/Valid Rate', simple_value=(mean_length-mean_invalid)/mean_length)
                         summary.value.add(tag='Perf/Blocking Prediction Accuracy', simple_value=(mean_length-mean_wrong_blocking)/mean_length)
-#                         summary.value.add(tag='Perf/On_Goal Rate', simple_value=mean_steps_on_goal/mean_length)
 
                         summary.value.add(tag='Losses/Value Loss', simple_value=v_l)
                         summary.value.add(tag='Losses/Policy Loss', simple_value=p_l)
@@ -537,10 +499,6 @@ class Worker:
                     with open('gifs3D/episode_{}.dat'.format(GIF_episode), 'wb') as file:
                         pickle.dump(episode_buffer, file)
 
-
-# ## Training
-
-# In[5]:
 
 
 # Learning parameters
@@ -658,7 +616,6 @@ def add_noise_to_msg(msg_input, noise_type = 3, noise_mag = 0.2):
 #########################################
 
 
-# In[6]:
 
 
 tf.reset_default_graph()

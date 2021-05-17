@@ -20,8 +20,10 @@ def normalized_columns_initializer(std=1.0):
     return _initializer
 
 class ACNet:
+    '''
+    Defines actor and critic network
+    '''
     def __init__(self, scope, a_size, trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE):
-        # print('TRAINING??????: ',TRAINING)
         with tf.variable_scope(scope):
             #The input size may require more work to fit the interface.
             self.actor_inputs = tf.placeholder(shape=[None,2,GRID_SIZE,GRID_SIZE], dtype=tf.float32)

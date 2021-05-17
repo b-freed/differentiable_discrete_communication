@@ -1,5 +1,4 @@
 
-#this should be the thing, right?
 from __future__ import division
 
 import gym
@@ -12,26 +11,16 @@ import threading
 import time
 import scipy.signal as signal
 import os
-os.chdir("home/bfreed/distributedRL_MAPF/AAAI_code")
-print(os.getcwd())
+# os.chdir("home/bfreed/distributedRL_MAPF/AAAI_code")
+# print(os.getcwd())
 import GroupLock
 import multiprocessing
-# get_ipython().run_line_magic('matplotlib', 'inline')
 import mapf_gym_rl_search as mapf_gym
 import pickle
-# import imageio
 from ACNet_rl_search2 import ACNet
-# from ACNet_seperate_1hot_hard_coded_simple import ACNet
 
 from tensorflow.python.client import device_lib
-# dev_list = device_lib.list_local_devices()
-# print(dev_list)
-# assert len(dev_list) > 1
 
-
-# ### Helper Functions
-
-# In[3]:
 
 
 def make_gif(images, fname, duration=2, true_image=False,salience=False,salIMGS=None):
@@ -67,9 +56,12 @@ def make_gif(images, fname, duration=2, true_image=False,salience=False,salIMGS=
 
 
 
-# Copies one set of variables to another.
-# Used to set worker network parameters to those of global network.
+
 def update_target_graph(from_scope,to_scope):
+    '''
+    Copies one set of variables to another.
+    Used to set worker network parameters to those of global network.
+    '''
     from_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, from_scope)
     to_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, to_scope)
 
@@ -79,21 +71,23 @@ def update_target_graph(from_scope,to_scope):
     return op_holder
 
 def discount(x, gamma):
+    '''
+    performs reward discounting
+    '''
     return signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
 
 def good_discount(x, gamma):
+    '''
+    performs reward discounting
+    '''
     return discount(x,gamma)
-#     positive = np.clip(x,0,None)
-#     negative = np.clip(x,None,0)
-#     return signal.lfilter([1], [1, -gamma], positive[::-1], axis=0)[::-1]+negative
 
-
-# ## Worker Agent
-
-# In[4]:
 
 
 class Worker:
+    '''
+    worker class to contain an instantiation of the environment and the agents inside
+    '''
     def __init__(self, game, metaAgentID, workerID, a_size, groupLock):
         self.workerID = workerID
         self.env = game
@@ -164,7 +158,6 @@ class Worker:
         num_samples = min(EPISODE_SAMPLES,len(action_advantages))
         sampleInd = np.sort(np.random.choice(action_advantages.shape[0], size=(num_samples,), replace=False))
 
-        # print('observations_critic[:len(action_advantages).shape: ',observations_critic[:len(action_advantages)].shape)
         rnn_state_actor = self.local_AC.state_init_actor
 
         feed_dict = {
@@ -205,21 +198,20 @@ class Worker:
             return (episode_count < NUM_EXPS)
 
     def synchronize(self):
-        #handy thing for keeping track of which to release and acquire
+        '''
+        handy thing for keeping track of which to release and acquire
+        '''
         if(not hasattr(self,"lock_bool")):
             self.lock_bool=False
         self.groupLock.release(int(self.lock_bool),self.name)
         self.groupLock.acquire(int(not self.lock_bool),self.name)
         self.lock_bool=not self.lock_bool
    
-    # def sample_msg_1hot(self, P_msg):
-    #     msg = np.random.choice(len(P_msg.flatten()),p=P_msg.flatten())
-    #     msg_1hot = np.zeros(len(P_msg.flatten()))
-    #     msg_1hot[msg] = 1
-
-    #     return msg_1hot
 
     def sample_msg_binary(self, P_msg):
+        '''
+        Samples a binary message from a vector of bernoulli probabilities in P_msg
+        '''
         rands = np.random.uniform(size = P_msg.shape)
         msg_binary = (P_msg > rands)
         return msg_binary.flatten()
@@ -227,6 +219,9 @@ class Worker:
 
     
     def choose_action_msg(self, s_actor, s_critic, rnn_state_actor, validActions, training):
+        '''
+        Choose an action and message
+        '''
         global action_buffer
 
         if self.agentID == 1:
@@ -234,6 +229,7 @@ class Worker:
         elif self.agentID == 2:
             other_agentID = 1
 
+        # get action and message probabilities, as well as rnn hidden state for actor
         a_dist, P_msg, rnn_state_actor, msg_entropy = sess.run([self.local_AC.policy,
                                                 self.local_AC.P_msg,
                                                 self.local_AC.state_out_actor,
@@ -242,12 +238,8 @@ class Worker:
                                                 self.local_AC.msg_inputs:[s_actor[1]],
                                                 self.local_AC.state_in_actor:rnn_state_actor})
 
-        # print('P_msg: ', P_msg)
         msg_binary = self.sample_msg_binary(P_msg)
-        # assert np.sum(msg_1hot) == 1
-        # print('msg_binary: ', msg_binary)
-        # print('msg_entropy: ',msg_entropy)
-
+        
         
 
         if(not (np.argmax(a_dist.flatten()) in validActions)):
@@ -256,35 +248,27 @@ class Worker:
             invalid = False
 
 
-
+        # record if action was valid or not
         train_valid = np.zeros(a_size)
         train_valid[validActions] = 1
         valid_dist = np.array([a_dist[0,validActions]])
         valid_dist /= np.sum(valid_dist)
 
+        # sample an action
         if TRAINING:
-            # if (pred_blocking.flatten()[0] < 0.5) == blocking:
-            #     wrong_blocking += 1
-            # a           = validActions[ np.random.choice(range(valid_dist.shape[1]),p=valid_dist.ravel()) ]
             a = np.random.choice(a_size, p = a_dist.flatten())
-            # train_val   = 1.
         else:
             a         = np.argmax(a_dist.flatten())
             if a not in validActions or not GREEDY:
                 a     = validActions[ np.random.choice(range(valid_dist.shape[1]),p=valid_dist.ravel()) ]
-            # train_val = 1.
 
         action_buffer[self.metaAgentID][self.agentID - 1] = a
 
 
 
         self.synchronize()
-        # print('action_buffer: ', action_buffer)
-        # print('self.metaAgentID: ',self.metaAgentID)
-
-        # print('action_buffer[self.metaAgentID][other_agentID - 1]: ',action_buffer[self.metaAgentID][other_agentID - 1])
-
-
+        
+        # get value estimate
         v = sess.run(self.local_AC.value, 
                     feed_dict={self.local_AC.critic_inputs:[s_critic],
                     self.local_AC.actions_other:[action_buffer[self.metaAgentID][other_agentID - 1]]
@@ -293,6 +277,10 @@ class Worker:
         return a,msg_binary,v,rnn_state_actor,invalid
 
     def work(self,max_episode_length,gamma,sess,coord,saver):
+        '''
+        Run training
+        '''
+
         global episode_count, swarm_reward, episode_rewards, episode_lengths, episode_mean_values, episode_invalid_ops,episode_wrong_blocking, value_buffer, action_buffer#, episode_invalid_goals
         total_steps, i_buf = 0, 0
         episode_buffers = [ [] for _ in range(NUM_BUFFERS) ]
@@ -306,7 +294,6 @@ class Worker:
         with sess.as_default(), sess.graph.as_default():
             while self.shouldRun(coord, episode_count):
                 sess.run(self.pull_global)
-#                 sess.run(self.copy_weights)
 
                 value_buffer[self.metaAgentID]  = np.zeros(self.env.num_agents)
                 action_buffer[self.metaAgentID] = np.zeros(self.env.num_agents)
@@ -332,12 +319,10 @@ class Worker:
 
                 self.synchronize() # synchronize starting time of the threads
 
-                # reset swarm_reward (for tensorboard)
                 swarm_reward[self.metaAgentID] = 0
 
                 while (not self.env.finished): # Give me something!
                     #Take an action using probabilities from policy network output.
-                   #a,msg_binary,v,rnn_state_actor,invalid
                     a,msg_binary,v,rnn_state_actor,invalid = self.choose_action_msg(s_actor,s_critic,rnn_state_actor, validActions, TRAINING)
 
                     #geneate noisy msg
@@ -354,7 +339,7 @@ class Worker:
 
                    
 
-
+                    # take a step in the environment
                     _, _, _, _, _,blocking,_ = self.env._step((self.agentID, a, msg_binary_noisy),episode=episode_count)
 
                     self.synchronize() # synchronize threads
@@ -450,10 +435,7 @@ class Worker:
                 episode_lengths[self.metaAgentID].append(episode_step_count)
                 episode_mean_values[self.metaAgentID].append(np.nanmean(episode_values))
                 episode_invalid_ops[self.metaAgentID].append(episode_inv_count)
-                # episode_wrong_blocking[self.metaAgentID].append(wrong_blocking)
-                # episode_msg_entropies[self.metaAgentID].append(e_msg)
-                # episode_msg_losses[self.metaAgentID].append(msg_l)
-#                 episode_steps_on_goal[self.metaAgentID].append(steps_on_goal)
+                
 
                 # Periodically save gifs of episodes, model parameters, and summary statistics.
                 if episode_count % EXPERIENCE_BUFFER_SIZE == 0 and printQ:
@@ -488,27 +470,19 @@ class Worker:
                         mean_length = np.mean(episode_lengths[self.metaAgentID][-SL:])
                         mean_value = np.mean(episode_mean_values[self.metaAgentID][-SL:])
                         mean_invalid = np.mean(episode_invalid_ops[self.metaAgentID][-SL:])
-                        # mean_wrong_blocking = np.mean(episode_wrong_blocking[self.metaAgentID][-SL:])
-                        # mean_msg_entropy = np.mean(episode_msg_entropies[self.metaAgentID][-SL:])
-                        # mean_msg_loss = np.mean(episode_msg_losses[self.metaAgentID][-SL:])
-#                         mean_steps_on_goal = np.mean(episode_steps_on_goal[self.metaAgentID][-SL:])
                         current_learning_rate_actor = sess.run(lr_a,feed_dict={global_step:episode_count})
                         current_learning_rate_critic = sess.run(lr_c,feed_dict={global_step:episode_count})
 
-
+                        # record stuff to tensorboard
                         summary = tf.Summary()
                         summary.value.add(tag='Perf/Actor Learning Rate',simple_value=current_learning_rate_actor)
                         summary.value.add(tag='Perf/Critic Learning Rate',simple_value=current_learning_rate_critic)
                         summary.value.add(tag='Perf/Reward', simple_value=mean_reward)
                         summary.value.add(tag='Perf/Length', simple_value=mean_length)
                         summary.value.add(tag='Perf/Valid Rate', simple_value=(mean_length-mean_invalid)/mean_length)
-                        # summary.value.add(tag='Perf/Blocking Prediction Accuracy', simple_value=(mean_length-mean_wrong_blocking)/mean_length)
-#                         summary.value.add(tag='Perf/On_Goal Rate', simple_value=mean_steps_on_goal/mean_length)
-
+                        
                         summary.value.add(tag='Losses/Value Loss', simple_value=v_l)
                         summary.value.add(tag='Losses/Policy Loss', simple_value=p_l)
-                        # summary.value.add(tag='Losses/Blocked Loss', simple_value=b_l)
-                        # summary.value.add(tag='Losses/Valid Loss', simple_value=valid_l)
                         summary.value.add(tag='Losses/Actor Grad Norm', simple_value=gn_a)
                         summary.value.add(tag='Losses/Critic Grad Norm', simple_value=gn_c)
                         summary.value.add(tag='Losses/Actor Var Norm', simple_value=vn_a)

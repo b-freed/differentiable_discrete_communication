@@ -1,5 +1,4 @@
 
-#this should be the thing, right?
 from __future__ import division
 
 import gym
@@ -14,21 +13,11 @@ import scipy.signal as signal
 import os
 import GroupLock
 import multiprocessing
-# get_ipython().run_line_magic('matplotlib', 'inline')
 import mapf_gym_diff_comms as mapf_gym
 import pickle
 from ACNet_diff_comms_recon_error_circle import ACNet
-# from ACNet_seperate_1hot_hard_coded_simple import ACNet
 
 from tensorflow.python.client import device_lib
-# dev_list = device_lib.list_local_devices()
-# print(dev_list)
-# assert len(dev_list) > 1
-
-
-# ### Helper Functions
-
-# In[3]:
 
 
 def make_gif(images, fname, duration=2, true_image=False,salience=False,salIMGS=None):
@@ -80,14 +69,7 @@ def discount(x, gamma):
 
 def good_discount(x, gamma):
     return discount(x,gamma)
-#     positive = np.clip(x,0,None)
-#     negative = np.clip(x,None,0)
-#     return signal.lfilter([1], [1, -gamma], positive[::-1], axis=0)[::-1]+negative
 
-
-# ## Worker Agent
-
-# In[4]:
 
 
 class Worker:
@@ -96,13 +78,10 @@ class Worker:
         self.env = game
         self.metaAgentID = metaAgentID
         self.name = "worker_"+str(self.workerID)
-        # self.groupLock = groupLock
-
+        
         self.nextGIF = episode_count # For GIFs output
         #Create the local copy of the network and the tensorflow op to copy global parameters to local network
-        # scope, a_size, num_agents, trainer_A,trainer_C,TRAINING,GRID_SIZE,GLOBAL_NET_SCOPE
         self.local_AC = ACNet(self.name,a_size, self.env.num_agents,trainer_A,trainer_C,True,GRID_SIZE,GLOBAL_NET_SCOPE)
-#         self.copy_weights = self.local_AC.homogenize_weights
         self.pull_global = update_target_graph(GLOBAL_NET_SCOPE, self.name)
         
         # logging stuff for tensorboard
@@ -113,8 +92,6 @@ class Worker:
 
     def train(self, rollout, sess, gamma, bootstrap_values):
         global episode_count
-
-        
 
         #0: s_actors,
         #1: s_critic,
@@ -136,7 +113,6 @@ class Worker:
         values = np.stack(rollout[:,5])
         recon_error = np.stack(rollout[:,6])
 
-        # @Renbo: get reconstruction error back out of rollout (same as episode buffer in work fucntion)
         
         # Here we take the rewards and values from the rollout, and use them to 
         # generate the advantage and discounted returns. (With bootstrapping)
@@ -156,7 +132,7 @@ class Worker:
             advantages_all[:,i] = advantages
         
         msgs_in = self.local_AC.msgs_init
-        # @Renbo: add in reconstruction error as input to ACNet diff_comms
+        
         feed_dict = {
             global_step:episode_count,
             self.local_AC.target_v:np.stack(discounted_rewards_all),
@@ -184,8 +160,7 @@ class Worker:
             self.local_AC.policies],
             feed_dict=feed_dict)
 
-        # if self.workerID ==0:
-        #     print('policies: ', policies)
+       
 
 
         return v_l/len(rollout), p_l/len(rollout), e_l/len(rollout), gn_a, gn_c, vn_a, vn_c
@@ -196,13 +171,6 @@ class Worker:
         else:
             return (episode_count < NUM_EXPS)
 
-    # def synchronize(self):
-    #     #handy thing for keeping track of which to release and acquire
-    #     if(not hasattr(self,"lock_bool")):
-    #         self.lock_bool=False
-    #     self.groupLock.release(int(self.lock_bool),self.name)
-    #     self.groupLock.acquire(int(not self.lock_bool),self.name)
-    #     self.lock_bool=not self.lock_bool
 
     def rotate_by_angle(self, msg, theta):
         '''
@@ -311,10 +279,7 @@ class Worker:
                                               self.local_AC.msgs_in:msgs_in,
                                               self.local_AC.reconstruction_error:np.zeros((1,msgs_in.shape[0],msgs_in.shape[1]))})  #here we feed in 0 reconstruction error because the encoding/decoding adds in error for us
 
-        # if self.workerID == 0:
-            # print('policies: ', policies)
-
-        #TODO: encode/decode
+        
         #encode
         noise = np.random.uniform(low= -BIN_WIDTH/2, high= BIN_WIDTH/2, size= msgs_out.shape[:2])
         new_msgs_out = self.rotate_by_angle(msgs_out, noise)
@@ -334,8 +299,8 @@ class Worker:
             msg = decode_for_channel_noise(msg, rand_arr, method = "perm")
             return msg
         
-        # @Jeff: noisy channel
-        #here we process the encoded msg such that we can add noise to it
+        
+        # here we process the encoded msg such that we can add noise to it
         np.random.seed(int(time.time()))
         new_msgs = []
         for msg in discretized_msgs:
@@ -351,9 +316,6 @@ class Worker:
         recon_error = self.compute_error_angle(msgs_out, new_msgs_out)
 
         
-        # assert np.all(np.isclose(new_msgs_out, self.rotate_by_angle(msgs_out,recon_error), rtol=1e-3))
-        #return new_msgs_out or msgs_out? I think it's new_msgs_out? 
-
 
         invalid = 0
         
@@ -367,31 +329,15 @@ class Worker:
                     invalid += 1
             
         else:
-            # TODO
             raise NotImplementedError
-            # train_valid = np.zeros(a_size)
-            # train_valid[validActions] = 1
-            # valid_dist = np.array([a_dist[0,validActions]])
-            # valid_dist /= np.sum(valid_dist)
-            # a         = np.argmax(a_dist.flatten())
-            # if a not in validActions or not GREEDY:
-            #     a     = validActions[ np.random.choice(range(valid_dist.shape[1]),p=valid_dist.ravel()) ]
-            
-        
-        
-
-
-
-        
+           
 
         #value should be of shape [# agents]
         v = sess.run(self.local_AC.values, 
                     feed_dict={self.local_AC.critic_inputs:[np.stack(s_critics)],
                     self.local_AC.actions:[actions]  #TODO: make this more elegant.  Ideally, compute it inside tensorflow graph.
                     })
-        # if self.workerID == 0:
-
-            # print('new_msgs_out: ', new_msgs_out)
+        
         
         return actions,new_msgs_out,v,invalid,recon_error
 
@@ -407,10 +353,7 @@ class Worker:
         with sess.as_default(), sess.graph.as_default():
             while self.shouldRun(coord, episode_count):
                 sess.run(self.pull_global)
-#                 sess.run(self.copy_weights)
 
-                # value_buffer[self.metaAgentID]  = np.zeros(self.env.num_agents)
-                # action_buffer[self.metaAgentID] = np.zeros(self.env.num_agents)
                 episode_buffer, episode_values = [], []
                 episode_reward = episode_step_count = episode_inv_count = 0
                 d = False
@@ -425,7 +368,6 @@ class Worker:
                     #observe world from each agent's perspectives
                     s_actors.append(self.env._observe_actor(a))
                     s_critics.append(self.env._observe_critic(a))
-                    # TODO: shouldn't this take an agetn id as arg?
                     validActions.append(self.env._listNextValidActions)
 
                 #initialize messages
@@ -456,25 +398,12 @@ class Worker:
                     actions,msgs,v,invalid,recon_error = self.choose_actions_msgs(s_actors,s_critics, msgs, validActions, TRAINING)
 
 
-                    #############################################################
-                    # for testing purposes
-                    # if self.workerID == 0:
-                    #     policies_test, msgs_out_test = sess.run([self.local_AC.policies,
-                    #                    self.local_AC.msgs_out], 
-                    #                    feed_dict={self.local_AC.actor_inputs:[np.stack(s_actors)],
-                    #                               self.local_AC.msgs_in:old_msgs,
-                    #                               self.local_AC.reconstruction_error:[recon_error]})
-
-                    #     print('policies_test: ', policies_test)
-                    #     print('msgs_out_test: ', msgs_out_test)
-                    #############################################################
 
 
                     #keep track of how many times agents attempt to take "invalid" actions
                     episode_inv_count += invalid
 
                     
-                    #TODO: should probably shuffle order in which agents get to step
                     for agent in range(1,self.env.num_agents + 1):
                         
                         _ = self.env._step((agent, actions[agent - 1]),episode=episode_count)
@@ -483,7 +412,6 @@ class Worker:
 
                     r = self.env.compute_reward()  #get shared reward after all agents have stepped
 
-                    # get observatins for each agent
 
 
                     s1_actors = []
@@ -501,15 +429,12 @@ class Worker:
                     if saveGIF:
                         episode_frames.append(self.env._render(mode='rgb_array',screen_width=200,screen_height=200))
 
-                    # @Renbo: we'll need to add reconstruction error to this episode buffer.  This is where we store up all the data we need for training.
                     episode_buffer.append([s_actors,s_critics,actions,r,d,v,recon_error])
                     episode_values.append(v)
                     episode_reward += r
                     s_actors = s1_actors
                     s_critics = s1_critics
                     total_steps += 1
-#                     steps_on_goal += int(on_goal)
-#                     on_goal = on_goal1
                     episode_step_count += 1
 
                     
@@ -517,16 +442,8 @@ class Worker:
 #                         s1 = s  #Oh yeah!! We are done, we did it!!!
                         print('\n{} Goodbye World. We did it!'.format(episode_step_count), end='\n')
 
-                    # If the episode hasn't ended, but the experience buffer is full, then we
-                    # make an update step using that experience rollout.
-
-
-
                     
                     if TRAINING and (len(episode_buffer) % EXPERIENCE_BUFFER_SIZE == 0 or d):
-                        # Since we don't know what the true final return is, we "bootstrap" from our current value estimation.
-                        
-
 
                         if not d:
                             #take 1 additional step, the values will become the s1Values
@@ -534,10 +451,6 @@ class Worker:
                             _, _,v,_,_ = self.choose_actions_msgs(s_actors, s_critics, msgs, validActions, TRAINING)
                             
                            
-
-                            # self.synchronize() # synchronize starting time of the threads
-
-
                             
                             s1Values[i_buf][:] = v 
                             
@@ -569,16 +482,12 @@ class Worker:
                         i_buf = (i_buf + 1) % NUM_BUFFERS
                         episode_buffers[i_buf] = []
 
-                       # sess.run(self.pull_global)
-#                         sess.run(self.copy_weights)
 
-                    # self.synchronize()
                     sess.run(self.pull_global)
                     if episode_step_count >= max_episode_length or d:
                         break
 
                 self.episode_lengths.append(episode_step_count)
-                # TODO: for some reason episode_values is empty when we're trying to take mean of it
                 self.episode_mean_values.append(np.nanmean(episode_values))
                 self.episode_invalid_ops.append(episode_inv_count)
                 
@@ -591,11 +500,9 @@ class Worker:
                 
                 swarm_reward += episode_reward
 
-                # self.synchronize()
 
                 self.episode_rewards.append(swarm_reward)
 
-                # TODO: figure out what the heck all of this is doing
 
                 if not TRAINING:
                     mutex.acquire()
@@ -657,10 +564,6 @@ class Worker:
                         pickle.dump(episode_buffer, file)
 
 
-# ## Training
-
-# In[5]:
-
 
 # Learning parameters
 NUM_BINS               = 16
@@ -703,16 +606,7 @@ GREEDY                 = False
 NUM_EXPS               = 100
 MODEL_NUMBER           = 40000
 
-# Shared arrays for tensorboard
-# episode_rewards        = [ [] for _ in range(NUM_META_AGENTS) ]
-# episode_lengths        = [ [] for _ in range(NUM_META_AGENTS) ]
-# episode_mean_values    = [ [] for _ in range(NUM_META_AGENTS) ]
-# episode_invalid_ops    = [ [] for _ in range(NUM_META_AGENTS) ]
-# value_buffer           = [ [] for _ in range(NUM_META_AGENTS) ]
-# action_buffer          = [ [] for _ in range(NUM_META_AGENTS) ]
-# episode_steps_on_goal  = [ [] for _ in range(NUM_META_AGENTS) ]
 printQ                 = False # (for headless)
-# swarm_reward           = [0]*NUM_META_AGENTS
 
 ###################################################
 ####### section for noisy channel functions  ######
@@ -721,9 +615,6 @@ printQ                 = False # (for headless)
 
 
 msg_length             = 10                     #the length of the original msg
-# commented out becuase we are defining the NUM_BINS directly now
-# bins_for_msg           = np.arange(-pi, pi, BIN_WIDTH)  #this needs to be changed 
-# NUM_BINS            = bins_for_msg.size - 1                            
 digit_width            = int(np.ceil(np.log2(NUM_BINS))) #how many bits per number
 bit_length             = digit_width*msg_length #the length of the binary msg
 hamm_start             = 5                      #inclusive
@@ -837,8 +728,6 @@ def decode_for_channel_noise(msg, random_arr, method = "perm"):
 #########################################
 
 
-# In[6]:
-
 
 tf.reset_default_graph()
 print("Hello World")
@@ -897,16 +786,7 @@ with tf.device("/gpu:0"):
 
         # Create groupLock
         workerNames = ["worker_"+str(i) for i in range(n,n+num_workers)]
-        # groupLock = GroupLock.GroupLock([workerNames,workerNames])
-        # groupLocks.append(groupLock)
-
-        # # Create worker classes
-        # workersTmp = []
-        # for i in range(ma*num_workers+1,(ma+1)*num_workers+1):
-        #     # self, game, metaAgentID, a_size, groupLock
-        #     workersTmp.append(Worker(gameEnv,ma,a_size,groupLock))
-        #     n+=1
-        # workers.append(workersTmp)
+       
         workers.append([Worker(gameEnv,ma,a_size)])#,groupLock)])
 
     global_summary = tf.summary.FileWriter(train_path)
